@@ -1,0 +1,84 @@
+# This file is the entry point to configure your own services.
+# Files in the packages/ subdirectory configure your dependencies.
+
+# Put parameters here that don't need to change on each machine where the app is deployed
+# https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
+parameters:
+    commission_for_private_client: 0.3
+    commission_for_business_client: 0.5
+    private_client_free_amount: 1000
+    private_client_free_withdraws: 3
+    default_currency: 'EUR'
+    deposit_percent: 0.03
+    currency_exchange_source: 'https://developers.paysera.com/tasks/api/currency-exchange-rates'
+    currency_precision:
+        JPY: 0
+services:
+    # default configuration for services in *this* file
+    _defaults:
+        autowire: true      # Automatically injects dependencies in your services.
+        autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+
+    # makes classes in src/ available to be used as services
+    # this creates a service per class whose id is the fully-qualified class name
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+
+    # add more service definitions when explicit configuration is needed
+    # please note that last definitions always *replace* previous ones
+    App\Service\Store\TransactionStore:
+        public: true
+
+    App\Repository\TransactionStoreRepository:
+        public: true
+        arguments:
+            $transactionStore: '@App\Service\Store\TransactionStore'
+            $defaultCurrency: '%default_currency%'
+
+    App\Service\ParserService:
+        arguments:
+            $parser: '@App\Service\Parser\CSVParser'
+
+    App\Service\Parser\CSVParser:
+        public: true
+
+    App\Service\CurrencyExchangeService:
+        arguments:
+            $apiUrl: '%currency_exchange_source%'
+
+    App\Service\CalculateCommissionService:
+        arguments:
+            $calculators: !tagged_iterator calculators
+
+    App\Service\Calculator\DepositCalculator:
+        arguments:
+            $moneyService: '@App\Service\MoneyService'
+            $depositPercent: '%deposit_percent%'
+
+    App\Service\Calculator\WithdrawCalculator:
+        arguments:
+            $privateClientFreeAmount: '%private_client_free_amount%'
+            $privateClientFreeWithdraws: '%private_client_free_withdraws%'
+            $moneyService: '@App\Service\MoneyService'
+            $transactions: '@App\Service\Store\TransactionStore'
+            $privateClientCommission: '%commission_for_private_client%'
+            $businessClientCommission: '%commission_for_business_client%'
+
+    App\Service\MoneyService:
+        public: true
+        arguments:
+            $defaultCurrency: '%default_currency%'
+
+
+    App\Service\CurrencyService:
+        arguments:
+            $currencyPrecision: '%currency_precision%'
+
+    App\Service\Normalizers\OutputNormalizer:
+        public: true
+        arguments:
+            $money: '@App\Service\MoneyService'
